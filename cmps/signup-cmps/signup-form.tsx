@@ -1,45 +1,65 @@
-import { Alert, Button, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
-import { useNavigation } from '@react-navigation/native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, Pressable, Alert } from 'react-native'
 import { Formik, Form, FormikProps } from 'formik';
 import * as yup from 'yup';
 import * as EmailValidator from 'email-validator';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types/navigations-type';
-import { auth } from '../../firebase.config';
+import { auth, db } from '../../firebase.config';
+import { utilService } from '../../services/utils.service';
 
-
-const loginYup = yup.object().shape({
+const signupYup = yup.object().shape({
+    username: yup.string().min(2).required('Please enter a username'),
     email: yup.string().email().required('Please enter a valid email address'),
     password: yup.string().min(8).required('Password has to be at least 8 characters')
 })
 interface Values {
+    username: string,
     email: string,
-    password: string
+    password: string,
 }
-export const LoginForm = () => {
+export const SignupForm = () => {
     const { navigate } = useNavigation<NativeStackNavigationProp<RootStackParamList>>()
-    const onLogin = async (email: string, password: string) => {
+    const onSignup = async (email: string, password: string, username: string) => {
         try {
-            await auth.signInWithEmailAndPassword(email, password)
+            const user = await auth.createUserWithEmailAndPassword(email, password)
+            // const res = await utilService.getRandProfilePic()
+            // console.log('res', res);
             console.log('success!!', email, password);
+            db.collection('users').add({
+                _id: user.user?.uid,
+                username,
+                email,
+                profilePic: await utilService.getRandProfilePic()
+            })
 
         } catch (err) {
-            Alert.alert('Failed to login')
+            Alert.alert('Failed to signup')
             console.log(err);
         }
     }
     return (
-
         <Formik initialValues={{
+            username: '',
             email: '',
             password: ''
         }}
-            onSubmit={(values) => { onLogin(values.email, values.password) }}
-            validationSchema={loginYup}
+            onSubmit={(values) => { onSignup(values.email, values.password, values.username) }}
+            validationSchema={signupYup}
             validateOnMount={true}>
             {({ handleChange, handleSubmit, values, errors, isValid }: FormikProps<Values>) => (
                 <>
                     <View style={styles.inputContainer}>
+                        <TextInput
+                            style={[styles.input, {
+                                borderColor: values.username.length < 1 ||
+                                    values.username.length > 2 ?
+                                    'black' : 'red'
+                            }]}
+                            placeholder='Enter username'
+                            autoFocus
+                            onChangeText={handleChange('username')}
+                            value={values.username} />
                         <TextInput
                             style={[styles.input, {
                                 borderColor: values.email.length < 1 ||
@@ -48,7 +68,6 @@ export const LoginForm = () => {
                             }]}
                             placeholder='Phone number, username or email'
                             keyboardType='email-address'
-                            autoFocus
                             onChangeText={handleChange('email')}
                             value={values.email} />
                         <TextInput style={[styles.input, {
@@ -69,20 +88,19 @@ export const LoginForm = () => {
                     <Pressable onPress={() => handleSubmit()}
                         style={validFormStyle(isValid).btn}
                         disabled={!isValid}>
-                        <Text style={styles.btnTxt}>Log In</Text>
+                        <Text style={styles.btnTxt}>Sign up</Text>
                     </Pressable>
 
                     <View style={styles.signUpContainer}>
-                        <Text>Don't have an account? </Text>
-                        <TouchableOpacity onPress={() => navigate('Signup')}>
-                            <Text style={{ color: '#3fa2f6' }}>Sign up</Text>
+                        <Text>Already have an account? </Text>
+                        <TouchableOpacity onPress={() => navigate('Login')}>
+                            <Text style={{ color: '#3fa2f6' }}>Login</Text>
                         </TouchableOpacity>
                     </View>
                 </>
 
             )}
         </Formik>
-
     )
 }
 
@@ -111,6 +129,7 @@ const styles = StyleSheet.create({
         marginTop: 50
     }
 })
+
 const validFormStyle = (isActive: boolean) => StyleSheet.create({
     btn: {
         marginTop: 35,
